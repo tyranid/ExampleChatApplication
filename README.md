@@ -10,6 +10,7 @@ macOS should be suitable as well as recompiling for .NET framework and Mono.
 To use either compile with Visual Studio 2017 with .NET Core support or from the command line do the 
 following:
 
+```bash
 cd ExampleChatApplication
 dotnet restore
 dotnet build
@@ -17,6 +18,7 @@ dotnet build
 dotnet exec ChatServer/bin/Debug/netcoreapp1.1/ChatServer.dll --c ChatServer/server.pfx
 \# Run client in another terminal
 dotnet exec ChatClient/bin/Debug/netcoreapp1.1/ChatClient.dll username 127.0.0.1/ChatClient
+```
 
 When running the command line client to send a message just type the message and hit enter. The 
 protocol does support multi-line messages but the client doesn't. You can exit the application
