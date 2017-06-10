@@ -5,9 +5,9 @@ VisualStudioVersion = 15.0.26430.12
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChatProtocol", "ChatProtocol\ChatProtocol.csproj", "{294BA14C-55D2-4ED2-810A-9C97031AFC4E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChatClientCore", "ChatClientCore\ChatClientCore.csproj", "{0BAD222A-2450-4ABB-8809-CA23FDD881FF}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChatClientCore", "ChatClient\ChatClient.csproj", "{0BAD222A-2450-4ABB-8809-CA23FDD881FF}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChatServerCore", "ChatServerCore\ChatServerCore.csproj", "{92EE267F-EE15-4E70-9EC7-AAF6A58E2774}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChatServerCore", "ChatServer\ChatServer.csproj", "{92EE267F-EE15-4E70-9EC7-AAF6A58E2774}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChatApplicationLibrary", "ChatApplicationLibrary\ChatApplicationLibrary.csproj", "{B12A4E00-9538-433C-AD0D-8C40058551BD}"
 EndProject
