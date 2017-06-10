@@ -6,7 +6,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\ChatApplicationLibrary\ChatApplicationLibrary.csproj" />
+    <PackageReference Include="Microsoft.Extensions.CommandLineUtils" Version="1.1.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ChatProtocol\ChatProtocol.csproj" />
   </ItemGroup>
 
 </Project>
