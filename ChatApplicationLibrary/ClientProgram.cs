@@ -21,9 +21,9 @@ using System.Collections.Generic;
 using System.Net;
 using System.Threading.Tasks;
 
-namespace ChatClient
+namespace ChatApplicationLibrary
 {
-    class Program
+    public class ClientProgram
     {
         static bool _color_enable;
 
@@ -268,7 +268,7 @@ namespace ChatClient
             return NetworkUtils.DEFAULT_PORT;
         }
 
-        static void Main(string[] args)
+        public static void Main(string[] args)
         {
             Console.WriteLine("ChatClient (c) 2017 James Forshaw");
             Console.WriteLine("WARNING: Don't use this for a real chat system!!!");

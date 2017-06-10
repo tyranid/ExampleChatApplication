@@ -23,9 +23,9 @@ using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 
-namespace ChatClient
+namespace ChatApplicationLibrary
 {
-    public sealed class ChatConnection : IDisposable
+    internal sealed class ChatConnection : IDisposable
     {
         public static int DEFAULT_CHAT_PORT = 12345;
 

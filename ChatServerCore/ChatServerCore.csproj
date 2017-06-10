@@ -10,7 +10,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\ChatProtocol\ChatProtocol.csproj" />
+    <ProjectReference Include="..\ChatApplicationLibrary\ChatApplicationLibrary.csproj" />
   </ItemGroup>
 
 </Project>

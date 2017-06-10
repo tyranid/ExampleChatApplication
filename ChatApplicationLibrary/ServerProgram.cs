@@ -27,9 +27,9 @@ using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 
-namespace ChatServer
+namespace ChatApplicationLibrary
 {
-    class Program
+    public class ServerProgram
     {
         struct AcceptState
         {
@@ -358,7 +358,7 @@ namespace ChatServer
             return NetworkUtils.DEFAULT_PORT;
         }
 
-        static void Main(string[] args)
+        public static void Main(string[] args)
         {
             Console.WriteLine("ChatServer (c) 2017 James Forshaw");
             Console.WriteLine("WARNING: Don't use this for a real chat system!!!");
