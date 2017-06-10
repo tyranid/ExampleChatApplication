@@ -24,8 +24,13 @@ namespace ChatProtocol
         private BinaryReader _reader;
         private BinaryWriter _writer;
 
-        public BinaryNetworkTransport(Stream stream)
+        public BinaryNetworkTransport(Stream stream, bool buffered)
         {
+            if (buffered)
+            {
+                stream = new BufferedStream(stream);
+            }
+
             _reader = new BinaryReader(stream);
             _writer = new BinaryWriter(stream);
         }
@@ -89,6 +94,7 @@ namespace ChatProtocol
             _writer.WriteNetworkOrder(chksum);
             _writer.Write(cmd);
             _writer.Write(data);
+            _writer.Flush();
         }
     }
 }

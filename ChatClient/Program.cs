@@ -197,16 +197,16 @@ namespace ChatClient
             return false;
         }
 
-        static async Task<ChatConnection> Connect(DnsEndPoint server, DnsEndPoint socks_proxy, bool text, bool ssl)
+        static async Task<ChatConnection> Connect(DnsEndPoint server, DnsEndPoint socks_proxy, bool text, bool tls, bool buffered)
         {
             ChatConnection conn = new ChatConnection();
             if (socks_proxy == null)
             {
-                await conn.Connect(server.Host, server.Port, text, ssl);
+                await conn.Connect(server.Host, server.Port, text, tls, buffered);
             }
             else
             {
-                await conn.Connect(server.Host, server.Port, text, ssl,
+                await conn.Connect(server.Host, server.Port, text, tls, buffered,
                     socks_proxy.Host, socks_proxy.Port);
             }
             return conn;
@@ -231,9 +231,9 @@ namespace ChatClient
             }
         }
 
-        static async Task MainLoop(DnsEndPoint server, DnsEndPoint socks_proxy, bool text, bool ssl, string username, bool supports_upgrade)
+        static async Task MainLoop(DnsEndPoint server, DnsEndPoint socks_proxy, bool text, bool tls, bool buffered, string username, bool supports_upgrade)
         {
-            using (ChatConnection conn = await Connect(server, socks_proxy, text, ssl))
+            using (ChatConnection conn = await Connect(server, socks_proxy, text, tls, buffered))
             {
                 Task client_task = RunClient(conn, username, supports_upgrade);
                 Task<string> line_task = Task.Run(Console.In.ReadLineAsync);
@@ -283,8 +283,11 @@ namespace ChatClient
             CommandOption xor = app.Option(
               "-x | --xor", "Enable simple XOR \"encryption\"",
               CommandOptionType.NoValue);
-            CommandOption ssl = app.Option(
-              "-l | --ssl", "Enable SSL",
+            CommandOption tls = app.Option(
+              "-l | --tls", "Enable TLS",
+              CommandOptionType.NoValue);
+            CommandOption buffered = app.Option(
+              "-b", "Buffer writes.",
               CommandOptionType.NoValue);
             CommandOption color_enable = app.Option(
                 "--color", "Enable console color output.",
@@ -312,14 +315,14 @@ namespace ChatClient
                     _color_enable = color_enable.HasValue();
                     int server_port = ParsePort(port);
 
-                    Console.WriteLine("Connecting to {0}:{1}", server.Value, ssl.HasValue() ? server_port + 1 : server_port);
+                    Console.WriteLine("Connecting to {0}:{1}", server.Value, tls.HasValue() ? server_port + 1 : server_port);
                     DnsEndPoint server_ep = new DnsEndPoint(server.Value, server_port);
                     DnsEndPoint socks_ep = null;
                     if (socks.HasValue())
                     {
                         socks_ep = NetworkUtils.ParseEndpoint(socks.Value());
                     }
-                    MainLoop(server_ep, socks_ep, text.HasValue(), ssl.HasValue(), username.Value, xor.HasValue()).Wait();
+                    MainLoop(server_ep, socks_ep, text.HasValue(), tls.HasValue(), buffered.HasValue(), username.Value, xor.HasValue()).Wait();
                 }
                 catch(Exception ex)
                 {

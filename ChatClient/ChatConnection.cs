@@ -44,14 +44,14 @@ namespace ChatClient
             return true;
         }
 
-        private async Task DoConnect(TcpClient client, string hostname, bool text, bool ssl)
+        private async Task DoConnect(TcpClient client, string hostname, bool text, bool tls, bool buffered)
         {
             Stream stm;
 
             _client = client;
             _client.NoDelay = true;
 
-            if (ssl)
+            if (tls)
             {
                 SslStream sslStream = new SslStream(_client.GetStream(), false, ValidateRemoteConnection);
 
@@ -77,7 +77,7 @@ namespace ChatClient
             else
             {
                 NetworkUtils.WriteNetworkOrderInt32(_base_stream, NetworkUtils.BINARY_MAGIC);
-                _transport = new BinaryNetworkTransport(_base_stream);
+                _transport = new BinaryNetworkTransport(_base_stream, buffered);
             }
         }
 
@@ -184,14 +184,14 @@ namespace ChatClient
             return client;
         }
 
-        public async Task Connect(string hostname, int port, bool text, bool ssl)
+        public async Task Connect(string hostname, int port, bool text, bool tls, bool buffered)
         {
-            await DoConnect(await Connect(hostname, ssl ? port+1 : port), hostname, text, ssl);
+            await DoConnect(await Connect(hostname, tls ? port+1 : port), hostname, text, tls, buffered);
         }
 
-        public async Task Connect(string hostname, int port, bool text, bool ssl, string proxyaddr, int proxyport)
+        public async Task Connect(string hostname, int port, bool text, bool tls, bool buffered, string proxyaddr, int proxyport)
         {
-            await DoConnect(await ConnectThroughSocks(hostname, ssl ? port+1 : port, proxyaddr, proxyport), hostname, text, ssl);
+            await DoConnect(await ConnectThroughSocks(hostname, tls ? port+1 : port, proxyaddr, proxyport), hostname, text, tls, buffered);
         }
 
         public void WritePacket(ProtocolPacket packet)

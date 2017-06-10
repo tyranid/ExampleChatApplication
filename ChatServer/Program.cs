@@ -127,6 +127,7 @@ namespace ChatServer
         {
             private XorStream _xor_stream;
             private INetworkTransport _transport;
+            private bool _buffered;
 
             public string UserName { get; set; }
             public string HostName { get; set; }
@@ -146,7 +147,7 @@ namespace ChatServer
                         switch (magic)
                         {
                             case NetworkUtils.BINARY_MAGIC:
-                                _transport = new BinaryNetworkTransport(_xor_stream);
+                                _transport = new BinaryNetworkTransport(_xor_stream, _buffered);
                                 break;
                             case NetworkUtils.TEXT_MAGIC:
                                 _transport = new TextNetworkTransport(_xor_stream);
@@ -182,9 +183,10 @@ namespace ChatServer
                 _transport?.Dispose();
             }
 
-            public ClientEntry(Stream stm, string endpoint)
+            public ClientEntry(Stream stm, string endpoint, bool buffered)
             {
                 _xor_stream = new XorStream(stm);
+                _buffered = buffered;
                 UserName = String.Format("User_", endpoint);
                 HostName = endpoint;
             }
@@ -247,7 +249,7 @@ namespace ChatServer
             return result;
         }
 
-        static void RunServer(int port, bool global, X509Certificate2 server_cert)
+        static void RunServer(int port, bool global, bool buffered, X509Certificate2 server_cert)
         {
             List<NetworkListener> listeners = new List<NetworkListener>();
             try
@@ -281,7 +283,7 @@ namespace ChatServer
                         var accept = accept_task.Result;
                         Console.WriteLine("Connection from {0} to {1}", accept.RemoteEndpoint, accept.LocalEndpoint);
                         tasks.Add(accept.Listener.AcceptConnection());
-                        ClientEntry client = new ClientEntry(accept.NewClient, accept.RemoteEndpoint);
+                        ClientEntry client = new ClientEntry(accept.NewClient, accept.RemoteEndpoint, buffered);
                         clients.Add(client);
                         tasks.Add(client.ReadPacketAsync());
                     }
@@ -377,7 +379,10 @@ namespace ChatServer
             CommandOption global = app.Option(
               "-g | --global", "Bind to all listening addresses.",
               CommandOptionType.NoValue);
-            
+            CommandOption buffered = app.Option(
+                "-b", "Buffer writes.",
+                CommandOptionType.NoValue);
+
             app.ShowInHelpText = true;
             app.HelpOption("-? | -h | --help");
             app.OnExecute(() =>
@@ -385,7 +390,8 @@ namespace ChatServer
                 try
                 {
                     RunServer(ParsePort(port),
-                        global.HasValue(), LoadCert(server_cert, cert_password));
+                        global.HasValue(), buffered.HasValue(), 
+                        LoadCert(server_cert, cert_password));
                 }
                 catch (Exception ex)
                 {
