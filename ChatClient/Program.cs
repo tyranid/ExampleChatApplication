@@ -214,14 +214,13 @@ namespace ChatClient
 
         static async Task RunClient(ChatConnection conn, string username, bool supports_upgrade)
         {
-            ProtocolPacket packet = await conn.HandleHello(username, supports_upgrade);
+            await conn.HandleHello(username, supports_upgrade);
             try
             {
                 bool exit = false;
-                exit = HandlePacket(packet);
                 while (!exit)
                 {
-                    packet = await conn.ReadPacket();
+                    var packet = await conn.ReadPacket();
                     exit = HandlePacket(packet);
                 }
             }

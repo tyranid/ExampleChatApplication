@@ -21,20 +21,16 @@ namespace ChatProtocol
         public string UserName { get; set; }
         public string HostName { get; set; }
         public bool SupportsSecurityUpgrade { get; set; }
-        public byte XorKey { get; set; }
 
         public override void GetData(IDataWriter writer)
         {
             writer.Write(UserName);
             writer.Write(HostName);
             writer.Write(SupportsSecurityUpgrade);
-            if (SupportsSecurityUpgrade)
-            {
-                writer.Write(XorKey);
-            }
         }
 
-        private HelloProtocolPacket() : base(ProtocolCommandId.Hello)
+        private HelloProtocolPacket() 
+            : base(ProtocolCommandId.Hello)
         {
         }
 
@@ -43,19 +39,14 @@ namespace ChatProtocol
             UserName = reader.ReadString();
             HostName = reader.ReadString();
             SupportsSecurityUpgrade = reader.ReadBoolean();
-            if (SupportsSecurityUpgrade)
-            {
-                XorKey = reader.ReadByte();
-            }
         }
 
         public HelloProtocolPacket(string userName, string hostName, 
-            bool supportsSecurityUpgrade, byte xorkey) : this()
+            bool supportsSecurityUpgrade) : this()
         {
             UserName = userName;
             HostName = hostName;
             SupportsSecurityUpgrade = supportsSecurityUpgrade;
-            XorKey = xorkey;
         }
     }
 }

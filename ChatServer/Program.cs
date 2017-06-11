@@ -95,7 +95,7 @@ namespace ChatServer
 
             private string FormatEndpoint(EndPoint ep)
             {
-                return String.Format("{0}{1}", _cert != null ? "ssl:" : "", ep);
+                return String.Format("{0}{1}", _cert != null ? "tls:" : "", ep);
             }
 
             public async Task<AcceptState> AcceptConnection()
@@ -206,8 +206,17 @@ namespace ChatServer
                         Console.WriteLine("Hello Packet for User: {0} HostName: {1}", hello.UserName, hello.HostName);
                         client.UserName = hello.UserName;
                         client.HostName = hello.HostName;
-                        result = client.WritePacket(hello);
-                        write_packet = packet;
+                        ReKeyProtocolPacket rekey = new ReKeyProtocolPacket();
+                        if (hello.SupportsSecurityUpgrade)
+                        {
+                            Random r = new Random();
+                            rekey.XorKey = (byte)r.Next(256);
+                        }
+                        result = client.WritePacket(rekey);
+                        client.SetXorKey(rekey.XorKey);
+
+                        write_packet = new MessageProtocolPacket(hello.UserName, 
+                            String.Format("I've just joined from {0}", hello.HostName));
                     }
                     break;
                 case ProtocolCommandId.Message:

@@ -81,27 +81,24 @@ namespace ChatClient
             }
         }
 
-        public async Task<HelloProtocolPacket> HandleHello(string username, bool supports_upgrade)
-        {
-            WritePacket(new HelloProtocolPacket(username, Environment.MachineName, supports_upgrade, 0));
+        public async Task HandleHello(string username, bool supports_upgrade)
+        {            
+            WritePacket(new HelloProtocolPacket(username, Environment.MachineName, supports_upgrade));
 
             ProtocolPacket packet = await ReadPacket(3000);
+            Console.WriteLine(packet);
             if (packet.CommandId == ProtocolCommandId.Goodbye)
             {
                 throw new EndOfStreamException(((GoodbyeProtocolPacket)packet).Message);
             }
+            else if (packet.CommandId != ProtocolCommandId.ReKey)
+            {
+                throw new EndOfStreamException("Unknow packet response");
+            }
             else
             {
-                HelloProtocolPacket p = packet as HelloProtocolPacket;
-                if (p != null)
-                {
-                    if (p.SupportsSecurityUpgrade)
-                    {
-                        _base_stream.XorKey = p.XorKey;
-                    }
-                }
-
-                return p;
+                ReKeyProtocolPacket p = (ReKeyProtocolPacket)packet;
+                _base_stream.XorKey = p.XorKey;
             }
         }
         

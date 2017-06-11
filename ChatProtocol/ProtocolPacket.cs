@@ -21,6 +21,7 @@ namespace ChatProtocol
     public enum ProtocolCommandId
     {
         Hello,
+        ReKey,
         Goodbye,
         Message,  
         SendFile,
@@ -58,6 +59,8 @@ namespace ChatProtocol
                     return new SendFileProtocolPacket(reader);
                 case ProtocolCommandId.GetUserList:
                     return new GetUserListProtocolPacket();
+                case ProtocolCommandId.ReKey:
+                    return new ReKeyProtocolPacket(reader);
                 default:
                     throw new ArgumentException(String.Format("Unsupported command {0}", command));
             }
