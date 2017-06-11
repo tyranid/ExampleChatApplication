@@ -86,7 +86,6 @@ namespace ChatClient
             WritePacket(new HelloProtocolPacket(username, Environment.MachineName, supports_upgrade));
 
             ProtocolPacket packet = await ReadPacket(3000);
-            Console.WriteLine(packet);
             if (packet.CommandId == ProtocolCommandId.Goodbye)
             {
                 throw new EndOfStreamException(((GoodbyeProtocolPacket)packet).Message);
