@@ -12,11 +12,12 @@ following:
 ```bash
 cd ExampleChatApplication
 dotnet restore
-dotnet build
+dotnet build ChatClient/ChatClient.csproj -f netcoreapp1.1 -c Release
+dotnet build ChatServer/ChatServer.csproj -f netcoreapp1.1 -c Release
 # Run server in one terminal on default port with TLS support
-dotnet exec ChatServer/bin/Debug/netcoreapp1.1/ChatServer.dll --c ChatServer/server.pfx
+dotnet exec ChatServer/bin/Release/netcoreapp1.1/ChatServer.dll --c ChatServer/server.pfx
 # Run client in another terminal
-dotnet exec ChatClient/bin/Debug/netcoreapp1.1/ChatClient.dll username 127.0.0.1/ChatClient
+dotnet exec ChatClient/bin/Release/netcoreapp1.1/ChatClient.dll username 127.0.0.1/ChatClient
 ```
 
 The build process will also generate .NET executables compatible with .NET frame 4.6.2 and Mono 5.
