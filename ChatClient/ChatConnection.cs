@@ -92,11 +92,15 @@ namespace ChatClient
             }
             else if (packet.CommandId != ProtocolCommandId.ReKey)
             {
-                throw new EndOfStreamException("Unknow packet response");
+                throw new EndOfStreamException("Unknown packet response");
             }
             else
             {
                 ReKeyProtocolPacket p = (ReKeyProtocolPacket)packet;
+                if (p.XorKey != 0)
+                {
+                    Console.WriteLine("ReKeying connection to key 0x{0:X02}", p.XorKey);
+                }
                 _base_stream.XorKey = p.XorKey;
             }
         }
