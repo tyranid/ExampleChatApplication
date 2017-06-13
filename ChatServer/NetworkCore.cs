@@ -16,43 +16,10 @@
 
 using ChatProtocol;
 using System;
-using System.Net;
-using System.Net.Sockets;
 using System.Threading.Tasks;
 
 namespace ChatServer
 {
-    sealed class UdpClientEntry
-    {
-        private UdpClient _client;
-        private IPEndPoint _endpoint;
-
-        public string UserName { get; set; }
-        public string HostName { get; set; }
-        public IPEndPoint ClientEndpoint { get; set; }
-
-        public bool WritePacket(ProtocolPacket packet)
-        {
-            try
-            {
-
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        public UdpClientEntry(UdpClient client, string hostname, IPEndPoint endpoint)
-        {
-            _client = client;
-            _endpoint = endpoint;
-            UserName = String.Format("User_", hostname);
-            HostName = hostname;
-        }
-    }
-
     struct AcceptState
     {
         public IClientEntry NewClient { get; private set; }
@@ -78,7 +45,7 @@ namespace ChatServer
         public ProtocolPacket Packet { get; private set; }
         public Exception Exception { get; private set; }
 
-        public ReadPacketState(TcpClientEntry client, 
+        public ReadPacketState(IClientEntry client, 
             ProtocolPacket packet, Exception exception)
         {
             Client = client;

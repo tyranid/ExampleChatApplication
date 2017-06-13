@@ -107,6 +107,7 @@ namespace ChatServer
                     Console.WriteLine("Running TLS server on port {0} Global Bind {1}", port + 1, global);
                     listeners.Add(new TcpNetworkListener(port + 1, global, buffered, server_cert));
                 }
+
                 List<Task> tasks = new List<Task>(listeners.Select(l => l.AcceptConnection()));
                 List<IClientEntry> clients = new List<IClientEntry>();
                 while (true)

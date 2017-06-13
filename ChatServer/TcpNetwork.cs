@@ -151,7 +151,7 @@ namespace ChatServer
         {
             _xor_stream = new XorStream(stm);
             _buffered = buffered;
-            UserName = String.Format("User_", endpoint);
+            UserName = String.Format("User_{0}", endpoint);
             HostName = endpoint;
         }
     }
