@@ -54,6 +54,7 @@ namespace ChatServer
                         UdpClientEntry client = new UdpClientEntry(this, result.RemoteEndPoint, _cancel_source.Token);
                         client.Enqueue(result.Buffer);
                         _clients.Add(result.RemoteEndPoint, client);
+                        return new AcceptState(client, result.RemoteEndPoint.ToString(), "UDP", this, null);
                     }
                 }
             }

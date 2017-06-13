@@ -197,71 +197,7 @@ namespace ChatServer
                 return false;
             }
         }
-
-        //static async Task RunUdpServer(int port, bool global)
-        //{
-        //    try
-        //    {
-        //        using (UdpClient client = new UdpClient(new IPEndPoint(global ? IPAddress.Any : IPAddress.Loopback, port)))
-        //        {
-        //            Console.WriteLine("Running UDP server on port {0} Global Bind {1}", port, global);
-                    
-
-        //            while (true)
-        //            {
-        //                UdpReceiveResult result = await client.ReceiveAsync();
-
-
-
-        //                if (accept_task != null)
-        //                {
-        //                    var accept = accept_task.Result;
-        //                    Console.WriteLine("Connection from {0} to {1}", accept.RemoteEndpoint, accept.LocalEndpoint);
-        //                    tasks.Add(accept.Listener.AcceptConnection());
-        //                    ClientEntry client = new ClientEntry(accept.NewClient, accept.RemoteEndpoint, buffered);
-        //                    clients.Add(client);
-        //                    tasks.Add(client.ReadPacketAsync());
-        //                }
-
-        //                if (client_task != null)
-        //                {
-        //                    var result = client_task.Result;
-        //                    bool keep_open = true;
-        //                    if (result.Exception != null)
-        //                    {
-        //                        Console.WriteLine("Error from client '{0}'", result.Exception.Message);
-        //                        keep_open = false;
-        //                    }
-        //                    else
-        //                    {
-        //                        Console.WriteLine("Received packet {0}", result.Packet);
-        //                        keep_open = HandlePacket(result.Client, clients.Where(c => c != result.Client), result.Packet);
-        //                    }
-
-        //                    if (keep_open)
-        //                    {
-        //                        // Re-add task to read the next packet.
-        //                        tasks.Add(result.Client.ReadPacketAsync());
-        //                    }
-        //                    else
-        //                    {
-        //                        Console.WriteLine("Closing Client");
-        //                        result.Client.Dispose();
-        //                        clients.Remove(result.Client);
-        //                    }
-        //                }
-        //            }
-        //        }
-        //    catch (OperationCanceledException)
-        //    {
-        //        Console.WriteLine("Closing Server");
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        Console.WriteLine("Error: {0}", ex);
-        //    }
-        //}
-
+        
         static X509Certificate2 LoadCert(CommandOption cert_file, CommandOption cert_password)
         {
             X509Certificate2 cert = null;
