@@ -21,9 +21,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Net.Security;
 using System.Net.Sockets;
-using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 
@@ -31,169 +29,8 @@ namespace ChatServer
 {
     public class ServerProgram
     {
-        struct AcceptState
-        {
-            public Stream NewClient { get; private set; }
-            public string RemoteEndpoint { get; private set; }
-            public string LocalEndpoint { get; private set; }
-            public NetworkListener Listener { get; private set; }
-            public Exception Exception { get; private set; }
-
-            public AcceptState(Stream new_client, string remote_endpoint,
-                string local_endpoint, NetworkListener listener, Exception exception)
-            {
-                NewClient = new_client;
-                RemoteEndpoint = remote_endpoint;
-                LocalEndpoint = local_endpoint;
-                Listener = listener;
-                Exception = exception;
-            }
-        }
-
-        struct ReadPacketState
-        {
-            public ClientEntry Client { get; private set; }
-            public ProtocolPacket Packet { get; private set; }
-            public Exception Exception { get; private set; }
-
-            public ReadPacketState(ClientEntry client, ProtocolPacket packet, Exception exception)
-            {
-                Client = client;
-                Packet = packet;
-                Exception = exception;
-            }
-        }
-
-        sealed class NetworkListener : IDisposable
-        {
-            private TcpListener _listener;
-            private X509Certificate2 _cert;
-            private string _local_endpoint;
-
-            public NetworkListener(int port, bool global, X509Certificate2 cert)
-            {
-                _listener = new TcpListener(global ? IPAddress.Any : IPAddress.Loopback, port);
-                _listener.Start();
-                _cert = cert;
-                if (cert != null)
-                {
-                    _local_endpoint = FormatEndpoint(_listener.Server.LocalEndPoint);
-                }
-            }
-
-            public void Dispose()
-            {
-                try
-                {
-                    _listener?.Stop();
-                }
-                catch
-                {
-                }
-                _cert?.Dispose();
-            }
-
-            private string FormatEndpoint(EndPoint ep)
-            {
-                return String.Format("{0}{1}", _cert != null ? "tls:" : "", ep);
-            }
-
-            public async Task<AcceptState> AcceptConnection()
-            {
-                string remote_endpoint = FormatEndpoint(new IPEndPoint(IPAddress.None, 0));
-                try
-                {
-                    TcpClient client = await _listener.AcceptTcpClientAsync();
-                    remote_endpoint = FormatEndpoint(client.Client.RemoteEndPoint);
-                    Stream stream = client.GetStream();
-                    if (_cert != null)
-                    {
-                        SslStream ssl_stream = new SslStream(stream);
-                        await ssl_stream.AuthenticateAsServerAsync(_cert, false,
-                            SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12, false);
-                        stream = ssl_stream;
-                    }
-                    return new AcceptState(stream, remote_endpoint, _local_endpoint, this, null);
-                }
-                catch (Exception ex)
-                {
-                    return new AcceptState(null, remote_endpoint, _local_endpoint, this, ex);
-                }
-            }
-        }
-
-
-        sealed class ClientEntry : IDisposable
-        {
-            private XorStream _xor_stream;
-            private INetworkTransport _transport;
-            private bool _buffered;
-
-            public string UserName { get; set; }
-            public string HostName { get; set; }
-
-            public void SetXorKey(byte key)
-            {
-                _xor_stream.XorKey = key;
-            }
-
-            public async Task<ReadPacketState> ReadPacketAsync()
-            {
-                try
-                {
-                    if (_transport == null)
-                    {
-                        int magic = await NetworkUtils.ReadNetworkOrderInt32Async(_xor_stream);
-                        switch (magic)
-                        {
-                            case NetworkUtils.BINARY_MAGIC:
-                                _transport = new BinaryNetworkTransport(_xor_stream, _buffered);
-                                break;
-                            case NetworkUtils.TEXT_MAGIC:
-                                _transport = new TextNetworkTransport(_xor_stream);
-                                break;
-                            default:
-                                throw new ArgumentException(String.Format("Invalid magic received {0:X}", magic));
-                        }
-                    }
-
-                    return new ReadPacketState(this, await _transport.ReadPacketAsync(), null);
-                }
-                catch (Exception ex)
-                {
-                    return new ReadPacketState(this, null, ex);
-                }
-            }
-
-            public bool WritePacket(ProtocolPacket packet)
-            {
-                try
-                {
-                    _transport.WritePacket(packet);
-                    return true;
-                }
-                catch
-                {
-                    return false;
-                }
-            }
-
-            public void Dispose()
-            {
-                _transport?.Dispose();
-            }
-
-            public ClientEntry(Stream stm, string endpoint, bool buffered)
-            {
-                _xor_stream = new XorStream(stm);
-                _buffered = buffered;
-                UserName = String.Format("User_", endpoint);
-                HostName = endpoint;
-            }
-        }
-
         // Return false if the connection should be closed.
-        static bool HandlePacket(ClientEntry client, IEnumerable<ClientEntry> other_clients, ProtocolPacket packet)
+        static bool HandlePacket(IClientEntry client, IEnumerable<IClientEntry> other_clients, ProtocolPacket packet)
         {
             bool result = true;
             ProtocolPacket write_packet = null;
@@ -229,7 +66,7 @@ namespace ChatServer
                 case ProtocolCommandId.Target:
                     {
                         TargetProtocolPacket target = (TargetProtocolPacket)packet;
-                        ClientEntry target_client = other_clients.Where(c => c.UserName.Equals(target.UserName)).FirstOrDefault();
+                        IClientEntry target_client = other_clients.Where(c => c.UserName.Equals(target.UserName)).FirstOrDefault();
                         if (target_client != null)
                         {
                             result = target_client.WritePacket(target.Packet);
@@ -249,7 +86,7 @@ namespace ChatServer
 
             if (write_packet != null)
             {
-                foreach (ClientEntry entry in other_clients)
+                foreach (TcpClientEntry entry in other_clients)
                 {
                     entry.WritePacket(write_packet);
                 }
@@ -260,18 +97,18 @@ namespace ChatServer
 
         static void RunServer(int port, bool global, bool buffered, X509Certificate2 server_cert)
         {
-            List<NetworkListener> listeners = new List<NetworkListener>();
+            List<INetworkListener> listeners = new List<INetworkListener>();
             try
             {
                 Console.WriteLine("Running server on port {0} Global Bind {1}", port, global);
-                listeners.Add(new NetworkListener(port, global, null));
+                listeners.Add(new TcpNetworkListener(port, global, buffered, null));
                 if (server_cert != null)
                 {
                     Console.WriteLine("Running TLS server on port {0} Global Bind {1}", port + 1, global);
-                    listeners.Add(new NetworkListener(port + 1, global, server_cert));
+                    listeners.Add(new TcpNetworkListener(port + 1, global, buffered, server_cert));
                 }
                 List<Task> tasks = new List<Task>(listeners.Select(l => l.AcceptConnection()));
-                List<ClientEntry> clients = new List<ClientEntry>();
+                List<IClientEntry> clients = new List<IClientEntry>();
                 while (true)
                 {
                     int task = Task.WaitAny(tasks.ToArray());
@@ -292,7 +129,7 @@ namespace ChatServer
                         var accept = accept_task.Result;
                         Console.WriteLine("Connection from {0} to {1}", accept.RemoteEndpoint, accept.LocalEndpoint);
                         tasks.Add(accept.Listener.AcceptConnection());
-                        ClientEntry client = new ClientEntry(accept.NewClient, accept.RemoteEndpoint, buffered);
+                        IClientEntry client = accept.NewClient;
                         clients.Add(client);
                         tasks.Add(client.ReadPacketAsync());
                     }
@@ -342,6 +179,87 @@ namespace ChatServer
                 }
             }
         }
+
+        static async Task<bool> WriteUdpPacket(UdpClient client, IPEndPoint endpoint, ProtocolPacket packet)
+        {
+            try
+            {
+                MemoryStream stm = new MemoryStream();
+                BinaryNetworkTransport.WritePacket(packet, new BinaryWriter(stm), false);
+                byte[] data = stm.ToArray();
+
+                int ret = await client.SendAsync(data, data.Length, endpoint);
+                return ret == data.Length;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        //static async Task RunUdpServer(int port, bool global)
+        //{
+        //    try
+        //    {
+        //        using (UdpClient client = new UdpClient(new IPEndPoint(global ? IPAddress.Any : IPAddress.Loopback, port)))
+        //        {
+        //            Console.WriteLine("Running UDP server on port {0} Global Bind {1}", port, global);
+                    
+
+        //            while (true)
+        //            {
+        //                UdpReceiveResult result = await client.ReceiveAsync();
+
+
+
+        //                if (accept_task != null)
+        //                {
+        //                    var accept = accept_task.Result;
+        //                    Console.WriteLine("Connection from {0} to {1}", accept.RemoteEndpoint, accept.LocalEndpoint);
+        //                    tasks.Add(accept.Listener.AcceptConnection());
+        //                    ClientEntry client = new ClientEntry(accept.NewClient, accept.RemoteEndpoint, buffered);
+        //                    clients.Add(client);
+        //                    tasks.Add(client.ReadPacketAsync());
+        //                }
+
+        //                if (client_task != null)
+        //                {
+        //                    var result = client_task.Result;
+        //                    bool keep_open = true;
+        //                    if (result.Exception != null)
+        //                    {
+        //                        Console.WriteLine("Error from client '{0}'", result.Exception.Message);
+        //                        keep_open = false;
+        //                    }
+        //                    else
+        //                    {
+        //                        Console.WriteLine("Received packet {0}", result.Packet);
+        //                        keep_open = HandlePacket(result.Client, clients.Where(c => c != result.Client), result.Packet);
+        //                    }
+
+        //                    if (keep_open)
+        //                    {
+        //                        // Re-add task to read the next packet.
+        //                        tasks.Add(result.Client.ReadPacketAsync());
+        //                    }
+        //                    else
+        //                    {
+        //                        Console.WriteLine("Closing Client");
+        //                        result.Client.Dispose();
+        //                        clients.Remove(result.Client);
+        //                    }
+        //                }
+        //            }
+        //        }
+        //    catch (OperationCanceledException)
+        //    {
+        //        Console.WriteLine("Closing Server");
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        Console.WriteLine("Error: {0}", ex);
+        //    }
+        //}
 
         static X509Certificate2 LoadCert(CommandOption cert_file, CommandOption cert_password)
         {

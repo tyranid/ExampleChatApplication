@@ -23,6 +23,5 @@ namespace ChatProtocol
     {
         Task<ProtocolPacket> ReadPacketAsync();
         void WritePacket(ProtocolPacket packet);
-
     }
 }

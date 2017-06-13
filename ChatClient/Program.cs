@@ -189,7 +189,7 @@ namespace ChatClient
                     }
                 }
             }
-            else
+            else if (!String.IsNullOrWhiteSpace(line))
             {
                 conn.SendMessage(username, line);
             }

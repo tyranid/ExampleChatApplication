@@ -53,16 +53,11 @@ namespace ChatProtocol
             _writer?.Dispose();
         }
 
-        private ProtocolPacket ReadPacket()
+        public static ProtocolPacket ReadPacket(BinaryReader reader, int total_len)
         {
-            int total_len = _reader.ReadInt32NetworkOrder();
-            if (total_len < 1)
-            {
-                throw new InvalidDataException("Invalid length field, must be at least 1 for command.");
-            }
-            int chksum = _reader.ReadInt32NetworkOrder();
-            byte cmd = _reader.ReadByte();
-            byte[] data = _reader.ReadAllBytes(total_len - 1);
+            int chksum = reader.ReadInt32NetworkOrder();
+            byte cmd = reader.ReadByte();
+            byte[] data = reader.ReadAllBytes(total_len - 1);
             if (CalculateChecksum(cmd, data) != chksum)
             {
                 throw new InvalidDataException("Checksum does not match");
@@ -71,30 +66,47 @@ namespace ChatProtocol
             return ProtocolPacket.FromData((ProtocolCommandId)cmd, new BinaryDataReader(data));
         }
 
+        private ProtocolPacket ReadPacket()
+        {
+            int total_len = _reader.ReadInt32NetworkOrder();
+            if (total_len < 1)
+            {
+                throw new InvalidDataException("Invalid length field, must be at least 1 for command.");
+            }
+            return ReadPacket(_reader, total_len);
+        }
+
         public Task<ProtocolPacket> ReadPacketAsync()
         {
-            //Task.Factory.StartNew(ReadPacket, TaskCreationOptions
             return Task.Run(() => ReadPacket());
         }
 
-        private byte[] PacketToBytes(ProtocolPacket packet)
+        private static byte[] PacketToBytes(ProtocolPacket packet)
         {
             BinaryDataWriter writer = new BinaryDataWriter();
             packet.GetData(writer);
             return writer.ToArray();
         }
 
-        public void WritePacket(ProtocolPacket packet)
+        public static void WritePacket(ProtocolPacket packet, BinaryWriter writer, bool write_length)
         {
             byte[] data = PacketToBytes(packet);
             int total_len = 1 + data.Length;
             byte cmd = (byte)(int)packet.CommandId;
             int chksum = CalculateChecksum(cmd, data);
-            _writer.WriteNetworkOrder(total_len);
-            _writer.WriteNetworkOrder(chksum);
-            _writer.Write(cmd);
-            _writer.Write(data);
-            _writer.Flush();
+            if (write_length)
+            {
+                writer.WriteNetworkOrder(total_len);
+            }
+            writer.WriteNetworkOrder(chksum);
+            writer.Write(cmd);
+            writer.Write(data);
+            writer.Flush();
+        }
+
+        public void WritePacket(ProtocolPacket packet)
+        {
+            WritePacket(packet, _writer, true);
         }
     }
 }
