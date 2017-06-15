@@ -18,6 +18,7 @@ using ChatProtocol;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -29,12 +30,13 @@ namespace ChatServer
     {
         UdpClient _client;
         Dictionary<IPEndPoint, UdpClientEntry> _clients;
-        CancellationTokenSource _cancel_source;
+        IPEndPoint _bind_endpoint;
 
         public UdpNetworkListener(int port, bool global)
         {
-            _client = new UdpClient(new IPEndPoint(global ? IPAddress.Any : IPAddress.Loopback, port));
-            _cancel_source = new CancellationTokenSource();
+            _bind_endpoint = new IPEndPoint(global ? IPAddress.Any : IPAddress.Loopback, port);
+            _client = new UdpClient(_bind_endpoint);
+            _client.DontFragment = true;
             _clients = new Dictionary<IPEndPoint, UdpClientEntry>();
         }
 
@@ -42,19 +44,60 @@ namespace ChatServer
         {
             while (true)
             {
-                UdpReceiveResult result = await _client.ReceiveAsync();
-                lock (_clients)
+                try
                 {
-                    if (_clients.ContainsKey(result.RemoteEndPoint))
+                    UdpReceiveResult result = await _client.ReceiveAsync();
+                    lock (_clients)
                     {
-                        _clients[result.RemoteEndPoint].Enqueue(result.Buffer);
+                        if (_clients.ContainsKey(result.RemoteEndPoint))
+                        {
+                            _clients[result.RemoteEndPoint].Enqueue(result.Buffer);
+                        }
+                        else
+                        {
+                            UdpClientEntry client = new UdpClientEntry(this, result.RemoteEndPoint);
+                            client.Enqueue(result.Buffer);
+                            _clients.Add(result.RemoteEndPoint, client);
+                            return new AcceptState(client, result.RemoteEndPoint.ToString(), "UDP", this, null);
+                        }
+                    }
+                }
+                catch(SocketException ex)
+                {
+                    if (ex.SocketErrorCode == SocketError.ConnectionReset)
+                    {
+                        Console.Error.WriteLine("One or more clients is dead, trying to ping them");
+
+                        lock (_clients)
+                        {
+                            foreach (var pair in _clients.ToArray())
+                            {
+                                var client = pair.Value;
+                                DateTime current_time = DateTime.UtcNow;
+
+                                if (!client.LastPingTime.HasValue)
+                                {
+                                    client.WritePacket(new PingProtocolPacket());
+                                    client.LastPingTime = current_time;
+                                }
+                                else if (current_time > client.LastPingTime.Value.AddMinutes(2))
+                                {
+                                    Console.WriteLine("Client {0} exceeded ping response time",
+                                        client.ClientEndpoint);
+                                    pair.Value.Cancel();
+                                    _clients.Remove(pair.Key);
+                                }
+                                else if (current_time > client.LastPingTime.Value.AddMinutes(1))
+                                {
+                                    // Send again but don't update ping time.
+                                    client.WritePacket(new PingProtocolPacket());
+                                }
+                            }
+                        }
                     }
                     else
                     {
-                        UdpClientEntry client = new UdpClientEntry(this, result.RemoteEndPoint, _cancel_source.Token);
-                        client.Enqueue(result.Buffer);
-                        _clients.Add(result.RemoteEndPoint, client);
-                        return new AcceptState(client, result.RemoteEndPoint.ToString(), "UDP", this, null);
+                        Console.Error.WriteLine("UDP socket had error {0}", ex.Message);
                     }
                 }
             }
@@ -63,7 +106,13 @@ namespace ChatServer
         public void Dispose()
         {
             _client?.Dispose();
-            _cancel_source.Cancel();
+            lock (_clients)
+            {
+                foreach (var client in _clients)
+                {
+                    client.Value.Cancel();
+                }
+            }
         }
 
         sealed class UdpClientEntry : IClientEntry
@@ -72,11 +121,12 @@ namespace ChatServer
             private IPEndPoint _endpoint;
             private Queue<byte[]> _queue;
             private SemaphoreSlim _semaphore;
-            private CancellationToken _token;
+            private CancellationTokenSource _cancel_source;
 
             public string UserName { get; set; }
             public string HostName { get; set; }
             public IPEndPoint ClientEndpoint { get; set; }
+            internal DateTime? LastPingTime { get; set; }
 
             internal void Enqueue(byte[] data)
             {
@@ -96,26 +146,33 @@ namespace ChatServer
                     byte[] data = stm.ToArray();
                     return _listener._client.SendAsync(data, data.Length, _endpoint).GetAwaiter().GetResult() == data.Length;
                 }
-                catch
+                catch(Exception)
                 {
+                    Cancel();
                     return false;
                 }
+            }
+
+            public void Cancel()
+            {
+                _cancel_source.Cancel();
             }
 
             public async Task<ReadPacketState> ReadPacketAsync()
             {
                 try
                 {
-                    await _semaphore.WaitAsync(_token);
+                    await _semaphore.WaitAsync(_cancel_source.Token);
                     byte[] data;
                     lock (_queue)
                     {
                         data = _queue.Dequeue();
+                        LastPingTime = null;
                     }
-
+                    
                     MemoryStream stm = new MemoryStream(data);
                     return new ReadPacketState(this, 
-                        BinaryNetworkTransport.ReadPacket(new BinaryReader(stm), data.Length), null);
+                        BinaryNetworkTransport.ReadPacket(new BinaryReader(stm), data.Length - 4), null);
                 }
                 catch (Exception ex)
                 {
@@ -134,15 +191,16 @@ namespace ChatServer
                 {
                     _listener._clients.Remove(_endpoint);
                 }
+                _cancel_source?.Dispose();
             }
 
-            public UdpClientEntry(UdpNetworkListener listener, IPEndPoint endpoint, CancellationToken token)
+            public UdpClientEntry(UdpNetworkListener listener, IPEndPoint endpoint)
             {
                 _listener = listener;
                 _endpoint = endpoint;
                 _semaphore = new SemaphoreSlim(0);
                 _queue = new Queue<byte[]>();
-                _token = token;
+                _cancel_source = new CancellationTokenSource();
                 UserName = String.Format("User_{0}", endpoint);
                 HostName = endpoint.ToString();
             }

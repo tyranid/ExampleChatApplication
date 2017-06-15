@@ -28,6 +28,7 @@ namespace ChatProtocol
         Target,
         GetUserList,
         UserList,
+        Ping,
     }
 
     public abstract class ProtocolPacket
@@ -61,6 +62,8 @@ namespace ChatProtocol
                     return new GetUserListProtocolPacket();
                 case ProtocolCommandId.ReKey:
                     return new ReKeyProtocolPacket(reader);
+                case ProtocolCommandId.Ping:
+                    return new PingProtocolPacket();
                 default:
                     throw new ArgumentException(String.Format("Unsupported command {0}", command));
             }

@@ -25,10 +25,115 @@ using System.Threading.Tasks;
 
 namespace ChatClient
 {
-    internal sealed class ChatConnection : IDisposable
+    internal abstract class ChatConnection : IDisposable
     {
         public static int DEFAULT_CHAT_PORT = 12345;
 
+        public abstract void Dispose();
+
+        public abstract void WritePacket(ProtocolPacket packet);
+
+        public abstract Task<ProtocolPacket> ReadPacket();
+
+        public abstract Task<ProtocolPacket> ReadPacket(int timeout);
+
+        protected abstract void SetXorKey(byte xorkey);
+
+        public async Task HandleHello(string username, bool supports_upgrade)
+        {
+            WritePacket(new HelloProtocolPacket(username, Environment.MachineName, supports_upgrade));
+
+            ProtocolPacket packet = await ReadPacket(3000);
+            if (packet.CommandId == ProtocolCommandId.Goodbye)
+            {
+                throw new EndOfStreamException(((GoodbyeProtocolPacket)packet).Message);
+            }
+            else if (packet.CommandId != ProtocolCommandId.ReKey)
+            {
+                throw new EndOfStreamException("Unknown packet response");
+            }
+            else
+            {
+                ReKeyProtocolPacket p = (ReKeyProtocolPacket)packet;
+                SetXorKey(p.XorKey);
+            }
+        }
+
+        public void SendMessage(string username, string message)
+        {
+            MessageProtocolPacket packet = new MessageProtocolPacket(username, message);
+
+            WritePacket(packet);
+        }
+    }
+
+    internal sealed class UdpChatConnection : ChatConnection
+    {
+        UdpClient _client;
+        IPEndPoint _endpoint;
+
+        public UdpChatConnection(DnsEndPoint endpoint)
+        {
+            IPAddress[] addrs = Dns.GetHostAddressesAsync(endpoint.Host).GetAwaiter().GetResult();
+            foreach (IPAddress addr in addrs)
+            {
+                if (addr.AddressFamily == AddressFamily.InterNetwork)
+                {
+                    _endpoint = new IPEndPoint(addr, endpoint.Port);
+                    break;
+                }
+            }
+
+            if (_endpoint == null)
+            {
+                throw new ArgumentException("Can't lookup hostname");
+            }
+
+            _client = new UdpClient(AddressFamily.InterNetwork);
+        }
+
+        public override void Dispose()
+        {
+            _client?.Dispose();
+        }
+
+        public async override Task<ProtocolPacket> ReadPacket()
+        {
+            UdpReceiveResult result = await _client.ReceiveAsync();
+            MemoryStream stm = new MemoryStream(result.Buffer);
+            return BinaryNetworkTransport.ReadPacket(new BinaryReader(stm), result.Buffer.Length - 4);
+        }
+
+        public async override Task<ProtocolPacket> ReadPacket(int timeout)
+        {
+            int last_timeout = _client.Client.ReceiveTimeout;
+            try
+            {
+                _client.Client.ReceiveTimeout = timeout;
+                return await ReadPacket();
+            }
+            finally
+            {
+                _client.Client.ReceiveTimeout = last_timeout;
+            }
+        }
+
+        public override void WritePacket(ProtocolPacket packet)
+        {
+            MemoryStream stm = new MemoryStream();
+            BinaryNetworkTransport.WritePacket(packet, new BinaryWriter(stm), false);
+            byte[] data = stm.ToArray();
+            _client.SendAsync(data, data.Length, _endpoint).GetAwaiter().GetResult();
+        }
+
+        protected override void SetXorKey(byte xorkey)
+        {
+            // Do nothing.
+        }
+    }
+
+    internal sealed class TcpChatConnection : ChatConnection
+    {
         private INetworkTransport _transport;
         private TcpClient _client;
         private XorStream _base_stream;
@@ -78,30 +183,6 @@ namespace ChatClient
             {
                 NetworkUtils.WriteNetworkOrderInt32(_base_stream, NetworkUtils.BINARY_MAGIC);
                 _transport = new BinaryNetworkTransport(_base_stream, buffered);
-            }
-        }
-
-        public async Task HandleHello(string username, bool supports_upgrade)
-        {            
-            WritePacket(new HelloProtocolPacket(username, Environment.MachineName, supports_upgrade));
-
-            ProtocolPacket packet = await ReadPacket(3000);
-            if (packet.CommandId == ProtocolCommandId.Goodbye)
-            {
-                throw new EndOfStreamException(((GoodbyeProtocolPacket)packet).Message);
-            }
-            else if (packet.CommandId != ProtocolCommandId.ReKey)
-            {
-                throw new EndOfStreamException("Unknown packet response");
-            }
-            else
-            {
-                ReKeyProtocolPacket p = (ReKeyProtocolPacket)packet;
-                if (p.XorKey != 0)
-                {
-                    Console.WriteLine("ReKeying connection to key 0x{0:X02}", p.XorKey);
-                }
-                _base_stream.XorKey = p.XorKey;
             }
         }
         
@@ -194,17 +275,17 @@ namespace ChatClient
             await DoConnect(await ConnectThroughSocks(hostname, tls ? port+1 : port, proxyaddr, proxyport), hostname, text, tls, buffered);
         }
 
-        public void WritePacket(ProtocolPacket packet)
+        public override void WritePacket(ProtocolPacket packet)
         {
             _transport.WritePacket(packet);
         }
 
-        public async Task<ProtocolPacket> ReadPacket()
+        public override async Task<ProtocolPacket> ReadPacket()
         {
             return await _transport.ReadPacketAsync();
         }
 
-        public async Task<ProtocolPacket> ReadPacket(int timeout)
+        public override async Task<ProtocolPacket> ReadPacket(int timeout)
         {
             int lastTimeout = _base_stream.ReadTimeout;
             try
@@ -218,16 +299,18 @@ namespace ChatClient
             }
         }
 
-        public void SendMessage(string username, string message)
+        protected override void SetXorKey(byte xorkey)
         {
-            MessageProtocolPacket packet = new MessageProtocolPacket(username, message);
-
-            WritePacket(packet);
+            if (xorkey != 0)
+            {
+                Console.WriteLine("ReKeying connection to key 0x{0:X02}", xorkey);
+                _base_stream.XorKey = xorkey;
+            }
         }
 
         #region IDisposable Members
 
-        public void Dispose()
+        public override void Dispose()
         {
             if (_client != null)
             {

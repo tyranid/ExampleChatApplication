@@ -197,19 +197,26 @@ namespace ChatClient
             return false;
         }
 
-        static async Task<ChatConnection> Connect(DnsEndPoint server, DnsEndPoint socks_proxy, bool text, bool tls, bool buffered)
+        static async Task<ChatConnection> Connect(DnsEndPoint server, DnsEndPoint socks_proxy, bool text, bool tls, bool buffered, bool udp)
         {
-            ChatConnection conn = new ChatConnection();
-            if (socks_proxy == null)
+            if (udp)
             {
-                await conn.Connect(server.Host, server.Port, text, tls, buffered);
+                return new UdpChatConnection(server);
             }
             else
             {
-                await conn.Connect(server.Host, server.Port, text, tls, buffered,
-                    socks_proxy.Host, socks_proxy.Port);
+                TcpChatConnection conn = new TcpChatConnection();
+                if (socks_proxy == null)
+                {
+                    await conn.Connect(server.Host, server.Port, text, tls, buffered);
+                }
+                else
+                {
+                    await conn.Connect(server.Host, server.Port, text, tls, buffered,
+                        socks_proxy.Host, socks_proxy.Port);
+                }
+                return conn;
             }
-            return conn;
         }
 
         static async Task RunClient(ChatConnection conn, string username, bool supports_upgrade)
@@ -221,39 +228,48 @@ namespace ChatClient
                 while (!exit)
                 {
                     var packet = await conn.ReadPacket();
-                    exit = HandlePacket(packet);
+                    if (packet.CommandId == ProtocolCommandId.Ping)
+                    {
+                        conn.WritePacket(packet);
+                    }
+                    else
+                    {
+                        exit = HandlePacket(packet);
+                    }
                 }
             }
-            catch
+            catch(Exception ex)
             {
+                Console.WriteLine("Error: {0}", ex.Message);
                 HandlePacket(new GoodbyeProtocolPacket("Connection Closed :("));
             }
         }
 
-        static async Task MainLoop(DnsEndPoint server, DnsEndPoint socks_proxy, bool text, bool tls, bool buffered, string username, bool supports_upgrade)
+        static void MainLoop(ChatConnection conn, string username, bool supports_upgrade)
         {
-            using (ChatConnection conn = await Connect(server, socks_proxy, text, tls, buffered))
+            Task client_task = RunClient(conn, username, supports_upgrade);
+            Task<string> line_task = Task.Run(Console.In.ReadLineAsync);
+            bool done = false;
+            while (!done)
             {
-                Task client_task = RunClient(conn, username, supports_upgrade);
-                Task<string> line_task = Task.Run(Console.In.ReadLineAsync);
-                bool done = false;
-                while (!done)
+                int task = Task.WaitAny(client_task, line_task);
+                if (task == 0)
                 {
-                    int task = Task.WaitAny(client_task, line_task);
-                    if (task == 0)
+                    if (client_task.IsFaulted)
                     {
-                        done = true;
+                        Console.WriteLine("Error: {0}", client_task.Exception);
                     }
-                    else
+                    done = true;
+                }
+                else
+                {
+                    if (line_task.IsFaulted)
                     {
-                        if (line_task.IsFaulted)
-                        {
-                            throw line_task.Exception;
-                        }
+                        throw line_task.Exception;
+                    }
 
-                        done = ProcessCommand(conn, username, line_task.Result.TrimEnd());
-                        line_task = Task.Run(Console.In.ReadLineAsync);
-                    }
+                    done = ProcessCommand(conn, username, line_task.Result.TrimEnd());
+                    line_task = Task.Run(Console.In.ReadLineAsync);
                 }
             }
         }
@@ -285,6 +301,9 @@ namespace ChatClient
             CommandOption tls = app.Option(
               "-l | --tls", "Enable TLS",
               CommandOptionType.NoValue);
+            CommandOption udp = app.Option(
+                "-u | --udp", "Use UDP",
+                CommandOptionType.NoValue);
             CommandOption buffered = app.Option(
               "-b", "Buffer writes.",
               CommandOptionType.NoValue);
@@ -296,7 +315,7 @@ namespace ChatClient
               CommandOptionType.NoValue);
             CommandOption port = app.Option(
                 "-p | --port <port>",
-                "Specify the base TCP port for connection.",
+                "Specify the base port for connection.",
                 CommandOptionType.SingleValue);
 
             app.ShowInHelpText = true;
@@ -311,6 +330,12 @@ namespace ChatClient
                         return 1;
                     }
 
+                    if (udp.HasValue() && (tls.HasValue() || xor.HasValue() || socks.HasValue()))
+                    {
+                        WriteError("Can't use both UDP with TLS, XOR or SOCKS options");
+                        return 1;
+                    }
+
                     _color_enable = color_enable.HasValue();
                     int server_port = ParsePort(port);
 
@@ -321,7 +346,12 @@ namespace ChatClient
                     {
                         socks_ep = NetworkUtils.ParseEndpoint(socks.Value());
                     }
-                    MainLoop(server_ep, socks_ep, text.HasValue(), tls.HasValue(), buffered.HasValue(), username.Value, xor.HasValue()).Wait();
+
+                    using (ChatConnection conn = Connect(server_ep, socks_ep, text.HasValue(),
+                        tls.HasValue(), buffered.HasValue(), udp.HasValue()).GetAwaiter().GetResult())
+                    {
+                        MainLoop(conn, username.Value, xor.HasValue());
+                    }
                 }
                 catch(Exception ex)
                 {

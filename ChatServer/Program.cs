@@ -82,11 +82,13 @@ namespace ChatServer
                     }
                     result = false;
                     break;
+                case ProtocolCommandId.Ping:
+                    break;
             }
 
             if (write_packet != null)
             {
-                foreach (TcpClientEntry entry in other_clients)
+                foreach (IClientEntry entry in other_clients)
                 {
                     entry.WritePacket(write_packet);
                 }
