@@ -36,7 +36,6 @@ namespace ChatServer
         {
             _bind_endpoint = new IPEndPoint(global ? IPAddress.Any : IPAddress.Loopback, port);
             _client = new UdpClient(_bind_endpoint);
-            _client.DontFragment = true;
             _clients = new Dictionary<IPEndPoint, UdpClientEntry>();
         }
 
