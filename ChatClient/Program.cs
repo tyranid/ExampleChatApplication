@@ -245,10 +245,17 @@ namespace ChatClient
             }
         }
 
+        static async Task<string> ReadFromConsole()
+        {
+            Console.Write("> ");
+            string line = await Task.Run(Console.In.ReadLineAsync);
+            return line;
+        }
+
         static void MainLoop(ChatConnection conn, string username, bool supports_upgrade)
         {
             Task client_task = RunClient(conn, username, supports_upgrade);
-            Task<string> line_task = Task.Run(Console.In.ReadLineAsync);
+            Task<string> line_task = ReadFromConsole();
             bool done = false;
             while (!done)
             {
@@ -269,7 +276,7 @@ namespace ChatClient
                     }
 
                     done = ProcessCommand(conn, username, line_task.Result.TrimEnd());
-                    line_task = Task.Run(Console.In.ReadLineAsync);
+                    line_task = ReadFromConsole();
                 }
             }
         }
