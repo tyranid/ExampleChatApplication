@@ -20,6 +20,7 @@ using System.IO;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 
@@ -145,11 +146,60 @@ namespace ChatClient
             SslPolicyErrors sslPolicyErrors
         )
         {
-            // We always succeed
+            if (sslPolicyErrors == SslPolicyErrors.None)
+            {
+                return true;
+            }
+
+            Console.WriteLine("SSL Policy Errors: {0}", sslPolicyErrors);
+            foreach (var status in chain.ChainStatus)
+            {
+                Console.WriteLine("Status: {0}", status.Status);
+                Console.WriteLine("StatusInformation: {0}", status.StatusInformation);
+            }
+
+            return false;
+        }
+
+        private static bool ValidateRemoteConnectionBypass(
+            Object sender,
+            X509Certificate certificate,
+            X509Chain chain,
+            SslPolicyErrors sslPolicyErrors
+        )
+        {
             return true;
         }
 
-        private async Task DoConnect(TcpClient client, string hostname, bool text, bool tls, bool buffered)
+        private static string SslProtocolToString(SslProtocols protocol)
+        {
+            switch (protocol)
+            {
+                case SslProtocols.Tls:
+                    return "TLS v1.0";
+                case SslProtocols.Tls11:
+                    return "TLS v1.1";
+                case SslProtocols.Tls12:
+                    return "TLS v1.2";
+                default:
+                    return protocol.ToString();
+            }
+        }
+
+        private static string KeyExToString(ExchangeAlgorithmType keyex)
+        {
+            // For some reason ECDH isn't showing up
+            if (keyex == (ExchangeAlgorithmType)44550)
+            {
+                return "ECDH";
+            }
+            else
+            {
+                return keyex.ToString();
+            }
+        }
+
+        private async Task DoConnect(TcpClient client, string hostname, bool text, bool tls, bool verify_tls, bool buffered)
         {
             Stream stm;
 
@@ -158,11 +208,21 @@ namespace ChatClient
 
             if (tls)
             {
-                SslStream sslStream = new SslStream(_client.GetStream(), false, ValidateRemoteConnection);
-
+                RemoteCertificateValidationCallback validation = verify_tls ?
+                    new RemoteCertificateValidationCallback(ValidateRemoteConnection) :
+                    new RemoteCertificateValidationCallback(ValidateRemoteConnectionBypass);
+                SslStream sslStream = new SslStream(_client.GetStream(), false,
+                        validation);
+            
                 int lastTimeout = sslStream.ReadTimeout;
                 sslStream.ReadTimeout = 3000;                
                 await sslStream.AuthenticateAsClientAsync(hostname);
+                Console.WriteLine("TLS Protocol: {0}", SslProtocolToString(sslStream.SslProtocol));
+                Console.WriteLine("TLS KeyEx   : {0}", KeyExToString(sslStream.KeyExchangeAlgorithm));
+                Console.WriteLine("TLS Cipher:   {0}", sslStream.CipherAlgorithm);
+                Console.WriteLine("TLS Hash:     {0}", sslStream.HashAlgorithm);
+                Console.WriteLine("Cert Subject: {0}", sslStream.RemoteCertificate.Subject);
+                Console.WriteLine("Cert Issuer : {0}", sslStream.RemoteCertificate.Issuer);
 
                 sslStream.ReadTimeout = lastTimeout;
 
@@ -265,14 +325,14 @@ namespace ChatClient
             return client;
         }
 
-        public async Task Connect(string hostname, int port, bool text, bool tls, bool buffered)
+        public async Task Connect(string hostname, int port, bool text, bool tls, bool verify_tls, bool buffered)
         {
-            await DoConnect(await Connect(hostname, tls ? port+1 : port), hostname, text, tls, buffered);
+            await DoConnect(await Connect(hostname, tls ? port+1 : port), hostname, text, tls, verify_tls, buffered);
         }
 
-        public async Task Connect(string hostname, int port, bool text, bool tls, bool buffered, string proxyaddr, int proxyport)
+        public async Task Connect(string hostname, int port, bool text, bool tls, bool verify_tls, bool buffered, string proxyaddr, int proxyport)
         {
-            await DoConnect(await ConnectThroughSocks(hostname, tls ? port+1 : port, proxyaddr, proxyport), hostname, text, tls, buffered);
+            await DoConnect(await ConnectThroughSocks(hostname, tls ? port+1 : port, proxyaddr, proxyport), hostname, text, tls, verify_tls, buffered);
         }
 
         public override void WritePacket(ProtocolPacket packet)

@@ -197,7 +197,7 @@ namespace ChatClient
             return false;
         }
 
-        static async Task<ChatConnection> Connect(DnsEndPoint server, DnsEndPoint socks_proxy, bool text, bool tls, bool buffered, bool udp)
+        static async Task<ChatConnection> Connect(DnsEndPoint server, DnsEndPoint socks_proxy, bool text, bool tls, bool verify_tls, bool buffered, bool udp)
         {
             if (udp)
             {
@@ -208,11 +208,11 @@ namespace ChatClient
                 TcpChatConnection conn = new TcpChatConnection();
                 if (socks_proxy == null)
                 {
-                    await conn.Connect(server.Host, server.Port, text, tls, buffered);
+                    await conn.Connect(server.Host, server.Port, text, tls, verify_tls, buffered);
                 }
                 else
                 {
-                    await conn.Connect(server.Host, server.Port, text, tls, buffered,
+                    await conn.Connect(server.Host, server.Port, text, tls, verify_tls, buffered,
                         socks_proxy.Host, socks_proxy.Port);
                 }
                 return conn;
@@ -308,6 +308,9 @@ namespace ChatClient
             CommandOption tls = app.Option(
               "-l | --tls", "Enable TLS",
               CommandOptionType.NoValue);
+            CommandOption tls_verify = app.Option(
+              "-k | --verify", "Verify TLS Server Certificate",
+              CommandOptionType.NoValue);
             CommandOption udp = app.Option(
                 "-u | --udp", "Use UDP",
                 CommandOptionType.NoValue);
@@ -355,7 +358,7 @@ namespace ChatClient
                     }
 
                     using (ChatConnection conn = Connect(server_ep, socks_ep, text.HasValue(),
-                        tls.HasValue(), buffered.HasValue(), udp.HasValue()).GetAwaiter().GetResult())
+                        tls.HasValue(), tls_verify.HasValue(), buffered.HasValue(), udp.HasValue()).GetAwaiter().GetResult())
                     {
                         MainLoop(conn, username.Value, xor.HasValue());
                     }
