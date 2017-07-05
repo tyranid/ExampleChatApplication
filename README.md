@@ -1,4 +1,4 @@
-# ExampleChatApplication - (c) James Forshaw 2017
+# SuperFunkyChatCore - (c) James Forshaw 2017
 A simple example command line chat application written for .NET to learn network protocol analysis.
 You should _NOT_ use this for any real world use, it's entirely designed to learn the basics of
 network protocol analysis.
