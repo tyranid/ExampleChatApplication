@@ -3,7 +3,7 @@ A simple example command line chat application written for .NET to learn network
 You should _NOT_ use this for any real world use, it's entirely designed to learn the basics of
 network protocol analysis.
 
-It should work on any platform with .NET Standard support 2.0, so .NET Core 2.0.0 on Windows, Linux and
+It should work on any platform with .NET Standard support 2.0, so .NET Core 3.X and 2.X on Windows, Linux and
 macOS should be suitable as well as recompiling for .NET framework and Mono.
 
 To use either compile with Visual Studio 2017 with .NET Core support or from the command line do the 
@@ -11,7 +11,6 @@ following:
 
 ```bash
 cd ExampleChatApplication
-dotnet restore
 dotnet build ChatClient/ChatClient.csproj -f netcoreapp2.0 -c Release
 dotnet build ChatServer/ChatServer.csproj -f netcoreapp2.0 -c Release
 # Run server in one terminal on default port with TLS support
